@@ -19,6 +19,8 @@ import java.util.EnumSet;
 import java.util.Map;
 
 import android.app.AlertDialog;
+import android.app.PendingIntent;
+import android.app.PendingIntent.CanceledException;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -83,10 +85,16 @@ public final class CaptureActivity extends BaseGlassActivity implements
     private BeepManager mBeepManager;
     private AmbientLightManager mAmbientLightManager;
     private ImageManager mImageManager;
+    
+    private static final String ACTION_AUTO_LAUNCH = String.format("%s.actions.AUTO_LAUNCH", CaptureActivity.class.getName());
+    private boolean autoLaunch;
 
     public static Intent newIntent(Context context) {
-        Intent intent = new Intent(context, CaptureActivity.class);
-        return intent;
+        return newIntent(context, false);
+    }
+    
+    public static Intent newIntent(Context context, boolean autoLaunch) {
+    	return new Intent(context, CaptureActivity.class).setAction(ACTION_AUTO_LAUNCH);
     }
 
     public ViewfinderView getViewfinderView() {
@@ -116,6 +124,12 @@ public final class CaptureActivity extends BaseGlassActivity implements
         mViewfinderView = (ViewfinderView) findViewById(R.id.viewfinder_view);
 
         PreferenceManager.setDefaultValues(this, R.xml.preferences, false);
+        
+        //turning autoLaunch on/off depending on intent that started activity
+        autoLaunch = 
+        	getIntent() != null && 
+        	getIntent().getAction() != null && 
+        	getIntent().getAction().equals(ACTION_AUTO_LAUNCH); 
     }
 
     @Override
@@ -290,7 +304,6 @@ public final class CaptureActivity extends BaseGlassActivity implements
 
     // Put up our own UI for how to handle the decoded contents.
     private void handleDecodeInternally(Result rawResult, Bitmap barcode) {
-
         Uri imageUri = null;
         String imageName = IMAGE_PREFIX + System.currentTimeMillis() + ".png";
         Log.v(TAG, "Saving image as: " + imageName);
@@ -301,10 +314,21 @@ public final class CaptureActivity extends BaseGlassActivity implements
         }
 
         ResultProcessor<?> processor = ResultProcessorFactory
-                .makeResultProcessor(this, rawResult, imageUri);
+            .makeResultProcessor(this, rawResult, imageUri);
 
-        startActivity(ResultsActivity.newIntent(this,
-                processor.getCardResults()));
+        if (!autoLaunch || processor.getCardResults().size() > 1) {
+            startActivity(ResultsActivity.newIntent(this,
+                        processor.getCardResults(), imageUri));
+        } else {
+            try {
+                PendingIntent pendingIntent = processor.getCardResults().get(0).getPendingIntent();
+                Log.i(TAG, "Auto launching intent: " + pendingIntent);
+                pendingIntent.send();
+                finish();
+            } catch (CanceledException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     private void initCamera(SurfaceHolder surfaceHolder) {
