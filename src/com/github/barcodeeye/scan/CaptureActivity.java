@@ -318,7 +318,7 @@ public final class CaptureActivity extends BaseGlassActivity implements
 
         if (!autoLaunch || processor.getCardResults().size() > 1) {
             startActivity(ResultsActivity.newIntent(this,
-                        processor.getCardResults(), imageUri));
+                          processor.getCardResults()));
         } else {
             try {
                 PendingIntent pendingIntent = processor.getCardResults().get(0).getPendingIntent();
